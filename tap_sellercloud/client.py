@@ -12,6 +12,7 @@ class SellercloudStream(RESTStream):
 
     access_token = None
     expires_at = None
+    replication_key_field = None
 
     @property
     def url_base(self) -> str:
@@ -72,5 +73,5 @@ class SellercloudStream(RESTStream):
         if self.replication_key:
             if isinstance(start_date, datetime):
                 start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
-            params["model.updatedDateFrom"] = start_date
+            params[self.replication_key_field] = start_date
         return params

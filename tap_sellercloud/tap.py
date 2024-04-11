@@ -7,10 +7,12 @@ from singer_sdk import typing as th  # JSON schema typing helpers
 
 from tap_sellercloud.streams import (
     PurchaseOrdersStream,
+    CatalogStream
 )
 
 STREAM_TYPES = [
     PurchaseOrdersStream,
+    CatalogStream
 ]
 
 
