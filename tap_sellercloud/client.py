@@ -74,4 +74,5 @@ class SellercloudStream(RESTStream):
             if isinstance(start_date, datetime):
                 start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
             params[self.replication_key_field] = start_date
+        self.logger.info(f"request params {params}")
         return params
