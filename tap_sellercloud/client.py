@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from singer_sdk.streams import RESTStream
 from datetime import timedelta, datetime
 import requests
-
+from datetime import datetime, timedelta, timezone
 
 class SellercloudStream(RESTStream):
     """Sellercloud stream class."""
@@ -13,6 +13,7 @@ class SellercloudStream(RESTStream):
     access_token = None
     expires_at = None
     replication_key_field = None
+    today = None
 
     @property
     def url_base(self) -> str:
@@ -53,6 +54,7 @@ class SellercloudStream(RESTStream):
     ) -> Optional[Any]:
         """Return a token for identifying next page or None if no more pages."""
         data = response.json()
+        self.logger.info(f"Total records for stream '{self.name}' is {data.get('TotalResults')}")
         data = data.get("Items", [])
         if len(data) == 0:
             return None
@@ -68,11 +70,17 @@ class SellercloudStream(RESTStream):
         params: dict = {}
         start_date = self.get_starting_timestamp(context) or datetime(2000, 1, 1)
         params["model.pageSize"] = self._page_size
+        if not self.today:
+            tz = timezone(timedelta(hours=-4), "GMT-4")
+            today = datetime.now(tz)
+            today = today.strftime('%Y-%m-%dT%H:%M:%S.%f')
+            self.today = today
         if next_page_token:
             params["model.pageNumber"] = next_page_token
         if self.replication_key:
             if isinstance(start_date, datetime):
                 start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
-            params[self.replication_key_field] = start_date
+            params[f"{self.replication_key_field}From"] = start_date
+            params[f"{self.replication_key_field}To"] = self.today
         self.logger.info(f"request params {params}")
         return params

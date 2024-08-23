@@ -15,7 +15,7 @@ class PurchaseOrdersStream(SellercloudStream):
     path = "/PurchaseOrders"
     primary_keys = ["ID"]
     replication_key = "LastRevisedOn"
-    replication_key_field = "model.updatedDateFrom"
+    replication_key_field = "model.updatedDate"
 
     schema = th.PropertiesList(
         th.Property("ID", th.NumberType),
@@ -79,7 +79,7 @@ class CatalogStream(SellercloudStream):
     path = "/Catalog"
     primary_keys = ["ID"]
     replication_key = "LastModifiedDate"
-    replication_key_field = "model.lastUpdatedFrom"
+    replication_key_field = "model.lastUpdated"
 
     schema = th.PropertiesList(
         th.Property("ImageUrl", th.StringType),
