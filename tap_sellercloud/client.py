@@ -109,3 +109,4 @@ class SellercloudStream(RESTStream):
             for record in super().get_records(context):
                 yield record
             self.is_performing_secondary_replication_check = False
+
