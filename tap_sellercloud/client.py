@@ -6,6 +6,7 @@ from singer_sdk.streams import RESTStream
 from datetime import timedelta, datetime
 import requests
 from datetime import datetime, timedelta, timezone
+import typing as t
 
 class SellercloudStream(RESTStream):
     """Sellercloud stream class."""
@@ -13,7 +14,10 @@ class SellercloudStream(RESTStream):
     access_token = None
     expires_at = None
     replication_key_field = None
+    secondary_replication_key_field = None
     today = None
+    is_performing_secondary_replication_check = False
+    
 
     @property
     def url_base(self) -> str:
@@ -77,10 +81,32 @@ class SellercloudStream(RESTStream):
             self.today = today
         if next_page_token:
             params["model.pageNumber"] = next_page_token
-        if self.replication_key:
+        if self.replication_key and not self.is_performing_secondary_replication_check:
             if isinstance(start_date, datetime):
                 start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
             params[f"{self.replication_key_field}From"] = start_date
             params[f"{self.replication_key_field}To"] = self.today
+        elif self.secondary_replication_key_field and self.is_performing_secondary_replication_check:
+            if isinstance(start_date, datetime):
+                start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
+            params[f"{self.secondary_replication_key_field}From"] = start_date
+            params[f"{self.secondary_replication_key_field}To"] = self.today
+            # To avoid duplicates, we need to filter out records that were already fetched
+            params[f"{self.replication_key_field}To"] = start_date
         self.logger.info(f"request params {params}")
         return params
+    
+    def get_records(self, context: dict | None) -> t.Iterable[dict[str, t.Any]]:
+        self.is_performing_secondary_replication_check = False
+
+        # Use the base class's get_records method
+        for record in super().get_records(context):
+            yield record
+
+        if self.secondary_replication_key_field:
+            self.logger.info("Beginning secondary replication check")
+            self.is_performing_secondary_replication_check = True
+            for record in super().get_records(context):
+                yield record
+            self.is_performing_secondary_replication_check = False
+
