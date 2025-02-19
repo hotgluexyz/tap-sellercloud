@@ -96,7 +96,7 @@ class SellercloudStream(RESTStream):
         self.logger.info(f"request params {params}")
         return params
     
-    def get_records(self, context: dict | None) -> t.Iterable[dict[str, t.Any]]:
+    def get_records(self, context: Optional[dict]) -> t.Iterable[Dict[str, Any]]:
         self.is_performing_secondary_replication_check = False
 
         # Use the base class's get_records method
