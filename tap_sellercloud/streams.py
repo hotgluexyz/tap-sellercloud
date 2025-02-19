@@ -80,6 +80,7 @@ class CatalogStream(SellercloudStream):
     primary_keys = ["ID"]
     replication_key = "LastModifiedDate"
     replication_key_field = "model.lastUpdated"
+    secondary_replication_key_field = "model.LastAggregate"
 
     schema = th.PropertiesList(
         th.Property("ImageUrl", th.StringType),
