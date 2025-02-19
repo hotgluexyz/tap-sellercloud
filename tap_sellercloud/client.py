@@ -17,7 +17,7 @@ class SellercloudStream(RESTStream):
     secondary_replication_key_field = None
     today = None
     is_performing_secondary_replication_check = False
-    end_date = None
+    
 
     @property
     def url_base(self) -> str:
