@@ -7,6 +7,7 @@ from datetime import timedelta, datetime
 import requests
 from datetime import datetime, timedelta, timezone
 import typing as t
+from singer_sdk.exceptions import RetriableAPIError
 
 class SellercloudStream(RESTStream):
     """Sellercloud stream class."""
@@ -36,12 +37,13 @@ class SellercloudStream(RESTStream):
         }
         response = requests.post(url, json=data)
         response.raise_for_status()
-        return response.json()["access_token"]
+        self.logger.info(f"Access token response: {response.json()}")
+        return response.json()["access_token"], response.json()["expires_in"]
 
     def get_access_token(self):
         if self.access_token is None or self.expires_at < datetime.now():
-            self.access_token = self.get_new_access_token()
-            self.expires_at = datetime.now() + timedelta(hours=1)
+            self.access_token, expires_in = self.get_new_access_token()
+            self.expires_at = datetime.now() + timedelta(seconds=expires_in) - timedelta(minutes=3)
         return self.access_token
 
     @property
@@ -99,7 +101,6 @@ class SellercloudStream(RESTStream):
     def get_records(self, context: Optional[dict]) -> t.Iterable[Dict[str, Any]]:
         self.is_performing_secondary_replication_check = False
 
-        # Use the base class's get_records method
         for record in super().get_records(context):
             yield record
 
@@ -110,3 +111,16 @@ class SellercloudStream(RESTStream):
                 yield record
             self.is_performing_secondary_replication_check = False
 
+
+    def validate_response(self, response: requests.Response) -> None:
+        # Reset token if received Invalid token response
+        if (
+            response.status_code == 401 and "Invalid token" in response.reason
+        ):
+            msg = self.response_error_message(response)
+            self.access_token = None
+            self.access_token = self.get_access_token()
+            response.request.headers["Authorization"] = f"Bearer {self.get_access_token()}"
+            raise RetriableAPIError(msg, response)
+
+        super().validate_response(response)
