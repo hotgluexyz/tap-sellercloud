@@ -124,3 +124,7 @@ class SellercloudStream(RESTStream):
             raise RetriableAPIError(msg, response)
 
         super().validate_response(response)
+
+
+    def backoff_max_tries(self) -> int:
+        return 10
