@@ -43,7 +43,7 @@ class SellercloudStream(RESTStream):
     def get_access_token(self):
         if self.access_token is None or self.expires_at < datetime.now():
             self.access_token, expires_in = self.get_new_access_token()
-            self.expires_at = datetime.now() + timedelta(seconds=expires_in)
+            self.expires_at = datetime.now() + timedelta(seconds=expires_in) - timedelta(minutes=3)
         return self.access_token
 
     @property
