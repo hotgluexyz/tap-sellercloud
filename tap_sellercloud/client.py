@@ -8,6 +8,7 @@ import requests
 from datetime import datetime, timedelta, timezone
 import typing as t
 from singer_sdk.exceptions import RetriableAPIError
+import pytz
 
 class SellercloudStream(RESTStream):
     """Sellercloud stream class."""
@@ -68,45 +69,71 @@ class SellercloudStream(RESTStream):
             return 2  # First page already fetched
         next_page_token = previous_token + 1
         return next_page_token
+    
+    def _get_time_intervals(self, start_date: datetime, end_date: datetime, interval_length_days) -> t.List[t.Tuple[datetime, datetime]]:
+        """Build a list of time intervals between start_date and end_date"""
+        """Built backwards so that recent date gets a full interval"""
+        intervals = []
+        interval_start_date = end_date
+        while interval_start_date > start_date:
+            interval_end_date = interval_start_date
+            interval_start_date = interval_end_date - timedelta(days=interval_length_days)
+            if interval_start_date < start_date:
+                interval_start_date = start_date
+            intervals.append((interval_start_date, interval_end_date))
+        return intervals[::-1]
 
     def get_url_params(
         self, context: Optional[dict], next_page_token: Optional[Any]
     ) -> Dict[str, Any]:
         """Return a dictionary of values to be used in URL parameterization."""
         params: dict = {}
-        start_date = self.get_starting_timestamp(context) or datetime(2000, 1, 1)
+        
+        start_date = context["interval_start_date"]
+        end_date = context["interval_end_date"]
+
+        
         params["model.pageSize"] = self._page_size
-        if not self.today:
-            tz = timezone(timedelta(hours=-4), "GMT-4")
-            today = datetime.now(tz)
-            today = today.strftime('%Y-%m-%dT%H:%M:%S.%f')
-            self.today = today
         if next_page_token:
             params["model.pageNumber"] = next_page_token
+        
         if self.replication_key and not self.is_performing_secondary_replication_check:
-            if isinstance(start_date, datetime):
-                start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
             params[f"{self.replication_key_field}From"] = start_date
-            params[f"{self.replication_key_field}To"] = self.today
+            params[f"{self.replication_key_field}To"] = end_date
         elif self.secondary_replication_key_field and self.is_performing_secondary_replication_check:
-            if isinstance(start_date, datetime):
-                start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
             params[f"{self.secondary_replication_key_field}From"] = start_date
-            params[f"{self.secondary_replication_key_field}To"] = self.today
+            params[f"{self.secondary_replication_key_field}To"] = end_date
             # To avoid duplicates, we need to filter out records that were already fetched
             params[f"{self.replication_key_field}To"] = start_date
         self.logger.info(f"request params {params}")
         return params
     
     def get_records(self, context: Optional[dict]) -> t.Iterable[Dict[str, Any]]:
+        # end date utc time
+        config_start_date = (self.get_starting_timestamp(context) or datetime(2000, 1, 1)).replace(tzinfo=pytz.utc)
+        time_intervals = self._get_time_intervals(
+            config_start_date,
+            datetime.now().replace(tzinfo=pytz.utc),
+            7,
+        )
         self.is_performing_secondary_replication_check = False
-
-        for record in super().get_records(context):
-            yield record
+        context = context or {}
+        for start_date, end_date in time_intervals:
+            self.logger.info(f"Fetching data from {start_date} to {end_date}")
+            if isinstance(start_date, datetime):
+                start_date = start_date.strftime("%Y-%m-%dT%H:%M:%S")
+            if isinstance(end_date, datetime):
+                end_date = end_date.strftime("%Y-%m-%dT%H:%M:%S")
+            context["interval_start_date"] = start_date
+            context["interval_end_date"] = end_date
+            for record in super().get_records(context):
+                yield record
 
         if self.secondary_replication_key_field:
             self.logger.info("Beginning secondary replication check")
             self.is_performing_secondary_replication_check = True
+            context["interval_start_date"] = config_start_date.strftime("%Y-%m-%dT%H:%M:%S")
+            context["interval_end_date"] = datetime.now().replace(tzinfo=pytz.utc).strftime("%Y-%m-%dT%H:%M:%S")
             for record in super().get_records(context):
                 yield record
             self.is_performing_secondary_replication_check = False
@@ -127,4 +154,4 @@ class SellercloudStream(RESTStream):
 
 
     def backoff_max_tries(self) -> int:
-        return 10
+        return 12
