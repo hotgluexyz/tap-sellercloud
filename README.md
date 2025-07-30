@@ -1,6 +1,7 @@
 # tap-sellercloud
 
-`tap-sellercloud` is a Singer tap for Sellercloud.
+**tap-sellercloud** is a Singer Tap capable of syncing data from Sellercloud. 
+**tap-sellercloud** can be run on [hotglue](https://hotglue.com), an embedded integration platform for running Singer Taps and Targets.
 
 
 
